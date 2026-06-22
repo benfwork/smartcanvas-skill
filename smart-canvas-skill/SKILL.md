@@ -14,4 +14,4 @@ python3 smart-canvas-skill/scripts/create_smartcanvas_image_dropdown.py \
   --category Test_category
 ```
 
-The script patches `Document.xml` and `smartcampaign.xml`, adds/updates the Image List form field, switches, switched layers, picture nodes, image category, and image files/sidecars. It preserves the outer SmartCanvas export ZIP shape when the input has nested `Admin/<campaign>.zip`.
+The script patches `Document.xml` and `smartcampaign.xml`, adds/updates the Image List form field, switches, switched layers, picture nodes, image categories, and image files/sidecars. It preserves the outer SmartCanvas export ZIP shape when the input has nested `Admin/<campaign>.zip`. The image input may be a nested directory or ZIP; non-image files are ignored, subfolders become category names such as `level2/levelA`, and duplicate image basenames are made unique for SmartCanvas's flat `images/` folder.

@@ -38,7 +38,9 @@ class ZipMember:
 
 @dataclass
 class ImageAsset:
+    source_path: str
     filename: str
+    category: str
     data: bytes
     width: int
     height: int
@@ -73,6 +75,11 @@ def safe_name(value: str) -> str:
 def display_name(value: str) -> str:
     words = re.sub(r"[_-]+", " ", value).strip().split()
     return " ".join(w[:1].upper() + w[1:] for w in words) or value
+
+
+def safe_file_segment(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("._")
+    return cleaned or "image"
 
 
 def qname(parent: ET.Element, tag: str) -> str:
@@ -138,6 +145,18 @@ def sidecar_prefix(filename: str) -> str:
     return f"{path.stem}_{ext}"
 
 
+def normalize_info_sidecar(data: bytes, asset: ImageAsset) -> bytes:
+    try:
+        root = parse_xml(data)
+    except ET.ParseError:
+        return data
+    root.set("Caption", asset.filename)
+    root.set("GroupName", asset.category)
+    root.set("ImageWidth", str(asset.width))
+    root.set("ImageHeight", str(asset.height))
+    return xml_bytes(root)
+
+
 def make_info_sidecar(asset: ImageAsset) -> bytes:
     bitmap_type = "jpeg" if Path(asset.filename).suffix.lower() in {".jpg", ".jpeg"} else "png"
     root = ET.Element(
@@ -146,7 +165,7 @@ def make_info_sidecar(asset: ImageAsset) -> bytes:
             "Source": "_Template",
             "Resource": "_Image",
             "Caption": asset.filename,
-            "GroupName": "",
+            "GroupName": asset.category,
             "FileOrigin": "",
             "IsSelected": "false",
             "ImageWidth": str(asset.width),
@@ -183,9 +202,9 @@ def collect_images(source: Path) -> tuple[list[ImageAsset], list[str]]:
     warnings: list[str] = []
     if source.is_dir():
         items: list[tuple[str, bytes, dict[str, bytes]]] = []
-        for path in sorted(source.iterdir()):
+        for path in sorted(source.rglob("*")):
             if path.is_file() and path.suffix.lower() in IMAGE_EXTS:
-                items.append((path.name, path.read_bytes(), {}))
+                items.append((path.relative_to(source).as_posix(), path.read_bytes(), {}))
         return build_assets(items, warnings)
 
     if not zipfile.is_zipfile(source):
@@ -193,33 +212,67 @@ def collect_images(source: Path) -> tuple[list[ImageAsset], list[str]]:
 
     with zipfile.ZipFile(source) as zf:
         infos = [info for info in zf.infolist() if not info.is_dir()]
+        names = [info.filename.replace("\\", "/").strip("/") for info in infos]
+        image_names = [name for name in names if Path(posixpath.basename(name)).suffix.lower() in IMAGE_EXTS]
+        strip_prefix = common_zip_root(image_names)
         grouped_sidecars: dict[str, dict[str, bytes]] = {}
         originals: list[tuple[str, bytes, dict[str, bytes]]] = []
         for info in infos:
-            name = info.filename.replace("\\", "/")
+            name = strip_zip_root(info.filename.replace("\\", "/").strip("/"), strip_prefix)
             base = posixpath.basename(name)
             if not base:
                 continue
             match = SIDECAR_RE.search(base)
             if match:
                 prefix = base[: match.start()]
-                grouped_sidecars.setdefault(prefix, {})[base] = zf.read(info)
+                key = posixpath.join(posixpath.dirname(name), prefix)
+                grouped_sidecars.setdefault(key, {})[base] = zf.read(info)
                 continue
             if Path(base).suffix.lower() in IMAGE_EXTS:
-                originals.append((base, zf.read(info), grouped_sidecars.setdefault(sidecar_prefix(base), {})))
+                key = posixpath.join(posixpath.dirname(name), sidecar_prefix(base))
+                originals.append((name, zf.read(info), grouped_sidecars.setdefault(key, {})))
         return build_assets(originals, warnings)
+
+
+def common_zip_root(image_names: list[str]) -> str:
+    if not image_names:
+        return ""
+    first_segments = {name.split("/", 1)[0] for name in image_names if "/" in name}
+    has_root_image = any("/" not in name for name in image_names)
+    if has_root_image or len(first_segments) != 1:
+        return ""
+    return next(iter(first_segments))
+
+
+def strip_zip_root(name: str, strip_prefix: str) -> str:
+    if strip_prefix and (name == strip_prefix or name.startswith(strip_prefix + "/")):
+        return name[len(strip_prefix) :].lstrip("/")
+    return name
 
 
 def build_assets(items: Iterable[tuple[str, bytes, dict[str, bytes]]], warnings: list[str]) -> tuple[list[ImageAsset], list[str]]:
     assets: list[ImageAsset] = []
-    seen: set[str] = set()
-    for filename, data, sidecars in items:
-        if filename in seen:
-            raise ValueError(f"duplicate image filename: {filename}")
-        seen.add(filename)
+    item_list = sorted(items, key=lambda item: item[0])
+    basename_counts: dict[str, int] = {}
+    for rel_path, _, _ in item_list:
+        basename_counts[posixpath.basename(rel_path)] = basename_counts.get(posixpath.basename(rel_path), 0) + 1
+    used_filenames: set[str] = set()
+    for rel_path, data, sidecars in item_list:
+        filename = output_filename(rel_path, basename_counts[posixpath.basename(rel_path)], used_filenames)
+        category = posixpath.dirname(rel_path)
         width, height = get_image_size(data, filename)
-        asset = ImageAsset(filename=filename, data=data, width=width, height=height, sidecars=dict(sidecars))
-        if not any(name.endswith("_info.xml") for name in asset.sidecars):
+        asset = ImageAsset(source_path=rel_path, filename=filename, category=category, data=data, width=width, height=height, sidecars={})
+        copied_info = False
+        for sidecar_name, sidecar_data in sidecars.items():
+            suffix = sidecar_suffix(sidecar_name)
+            if suffix is None:
+                continue
+            output_sidecar_name = f"{sidecar_prefix(filename)}_{suffix}"
+            if suffix == "info.xml":
+                sidecar_data = normalize_info_sidecar(sidecar_data, asset)
+                copied_info = True
+            asset.sidecars[output_sidecar_name] = sidecar_data
+        if not copied_info:
             asset.sidecars[f"{sidecar_prefix(filename)}_info.xml"] = make_info_sidecar(asset)
             warnings.append(f"{filename}: generated minimal _info.xml sidecar")
         if not any(name.endswith("_thumbi.png") for name in asset.sidecars):
@@ -230,6 +283,41 @@ def build_assets(items: Iterable[tuple[str, bytes, dict[str, bytes]]], warnings:
     if not assets:
         raise ValueError("no images found in source")
     return assets, warnings
+
+
+def apply_default_category(assets: list[ImageAsset], default_category: str) -> None:
+    for asset in assets:
+        if not asset.category:
+            asset.category = default_category
+        for sidecar_name, sidecar_data in list(asset.sidecars.items()):
+            if sidecar_name.endswith("_info.xml"):
+                asset.sidecars[sidecar_name] = normalize_info_sidecar(sidecar_data, asset)
+
+
+def output_filename(rel_path: str, basename_count: int, used_filenames: set[str]) -> str:
+    base = posixpath.basename(rel_path)
+    ext = Path(base).suffix
+    stem = Path(base).stem
+    if basename_count == 1:
+        candidate = safe_file_segment(stem) + ext.lower()
+    else:
+        parent = posixpath.dirname(rel_path)
+        path_stem = "__".join(safe_file_segment(part) for part in [*parent.split("/"), stem] if part)
+        candidate = path_stem + ext.lower()
+    original_candidate = candidate
+    counter = 2
+    while candidate in used_filenames:
+        candidate = f"{Path(original_candidate).stem}_{counter}{Path(original_candidate).suffix}"
+        counter += 1
+    used_filenames.add(candidate)
+    return candidate
+
+
+def sidecar_suffix(filename: str) -> str | None:
+    match = SIDECAR_RE.search(filename)
+    if not match:
+        return None
+    return match.group(2).lower()
 
 
 def read_package(path: Path) -> tuple[dict[str, ZipMember], str | None, dict[str, ZipMember]]:
@@ -254,6 +342,20 @@ def campaign_prefix(document_name: str) -> str:
     return normalized.rsplit("/", 1)[0] + "/" if "/" in normalized else ""
 
 
+def local_name(element: ET.Element) -> str:
+    return element.tag.rsplit("}", 1)[-1]
+
+
+def editable_document(root: ET.Element) -> ET.Element:
+    if local_name(root) == "Document":
+        return root
+    if local_name(root) == "Documents":
+        document = find_child(root, "Document")
+        if document is not None:
+            return document
+    raise ValueError("Document.xml must have a Document root or contain a Document child")
+
+
 def ensure_form_dropdown(root: ET.Element, field_name: str, assets: list[ImageAsset]) -> None:
     resources = ensure_child(root, "Resources")
     data_interface = ensure_child(resources, "DataInterface2")
@@ -271,7 +373,7 @@ def ensure_form_dropdown(root: ET.Element, field_name: str, assets: list[ImageAs
     group.set("AssociatedPageNo", "1")
 
     for child in list(group):
-        if child.tag.rsplit("}", 1)[-1] == "DataInterfaceItem" and child.get("Name") == field_name:
+        if local_name(child) == "DataInterfaceItem" and child.get("Name") == field_name:
             group.remove(child)
 
     item = ET.SubElement(
@@ -320,7 +422,7 @@ def ensure_switches(root: ET.Element, field_name: str, assets: list[ImageAsset])
     switches = ensure_child(resources, "Switches")
     wanted = {asset.switch_name for asset in assets}
     for child in list(switches):
-        if child.tag.rsplit("}", 1)[-1] == "Switch" and child.get("Name") in wanted:
+        if local_name(child) == "Switch" and child.get("Name") in wanted:
             switches.remove(child)
     for asset in assets:
         ET.SubElement(
@@ -335,7 +437,7 @@ def ensure_switches(root: ET.Element, field_name: str, assets: list[ImageAsset])
 
 def ensure_layers_and_pictures(root: ET.Element, assets: list[ImageAsset], left: float, top: float, height: float) -> None:
     layers = ensure_child(root, "Layers")
-    existing_layers = {layer.get("DisplayName"): layer for layer in layers if layer.tag.rsplit("}", 1)[-1] == "Layer"}
+    existing_layers = {layer.get("DisplayName"): layer for layer in layers if local_name(layer) == "Layer"}
     default_layer = next((layer for layer in layers if layer.get("IsDefault") == "true"), None)
     insert_at = list(layers).index(default_layer) if default_layer is not None else len(layers)
 
@@ -361,7 +463,7 @@ def ensure_layers_and_pictures(root: ET.Element, assets: list[ImageAsset], left:
     existing_pictures = {
         picture.get("Source"): picture
         for picture in composition
-        if picture.tag.rsplit("}", 1)[-1] == "Picture" and picture.get("Source")
+        if local_name(picture) == "Picture" and picture.get("Source")
     }
     for asset in assets:
         picture = existing_pictures.get(asset.xml_source)
@@ -397,14 +499,14 @@ def ensure_layers_and_pictures(root: ET.Element, assets: list[ImageAsset], left:
 
 def find_first(root: ET.Element, tag: str) -> ET.Element | None:
     for elem in root.iter():
-        if elem.tag.rsplit("}", 1)[-1] == tag:
+        if local_name(elem) == tag:
             return elem
     return None
 
 
 def find_layer_id(layers: ET.Element, display_name: str) -> str:
     for layer in layers:
-        if layer.tag.rsplit("}", 1)[-1] == "Layer" and layer.get("DisplayName") == display_name:
+        if local_name(layer) == "Layer" and layer.get("DisplayName") == display_name:
             return layer.get("Name", "")
     raise ValueError(f"missing layer for {display_name}")
 
@@ -414,7 +516,7 @@ def random_color(seed: str) -> str:
     return f"#{rng.randrange(32, 224):02x}{rng.randrange(32, 224):02x}{rng.randrange(32, 224):02x}"
 
 
-def sync_smartcampaign(document_root: ET.Element, smartcampaign_data: bytes | None, category: str) -> bytes:
+def sync_smartcampaign(document_root: ET.Element, smartcampaign_data: bytes | None, categories: Iterable[str]) -> bytes:
     if smartcampaign_data:
         root = parse_xml(smartcampaign_data)
     else:
@@ -427,8 +529,11 @@ def sync_smartcampaign(document_root: ET.Element, smartcampaign_data: bytes | No
         root.insert(0, resources)
     campaign_resources = ensure_child(root, "CampaignResources")
     image_categories = ensure_child(campaign_resources, "ImageCategories")
-    if not any(child.tag.rsplit("}", 1)[-1] == "Category" and child.get("Name") == category for child in image_categories):
-        ET.SubElement(image_categories, "Category", {"Name": category, "Type": "image"})
+    existing_categories = {child.get("Name") for child in image_categories if local_name(child) == "Category"}
+    for category in categories:
+        if category and category not in existing_categories:
+            ET.SubElement(image_categories, "Category", {"Name": category, "Type": "image"})
+            existing_categories.add(category)
     return xml_bytes(root)
 
 
@@ -466,6 +571,7 @@ def patch_package(args: argparse.Namespace) -> list[str]:
     input_path = Path(args.input)
     output_path = Path(args.output)
     assets, warnings = collect_images(Path(args.images))
+    apply_default_category(assets, args.category)
     outer, inner_name, inner = read_package(input_path)
     document_name = find_inner_file(inner, "Document.xml")
     smartcampaign_name = next((name for name in inner if name.replace("\\", "/").endswith("/smartcampaign.xml")), None)
@@ -473,13 +579,15 @@ def patch_package(args: argparse.Namespace) -> list[str]:
     image_prefix = prefix + "images/"
 
     document_root = parse_xml(inner[document_name].data)
-    ensure_form_dropdown(document_root, args.field_name, assets)
-    ensure_switches(document_root, args.field_name, assets)
-    ensure_layers_and_pictures(document_root, assets, args.left, args.top, args.height)
+    document = editable_document(document_root)
+    ensure_form_dropdown(document, args.field_name, assets)
+    ensure_switches(document, args.field_name, assets)
+    ensure_layers_and_pictures(document, assets, args.left, args.top, args.height)
 
     replacements = {document_name: xml_bytes(document_root)}
     smartcampaign_data = inner[smartcampaign_name].data if smartcampaign_name else None
-    smartcampaign_output = sync_smartcampaign(document_root, smartcampaign_data, args.category)
+    categories = sorted({asset.category for asset in assets if asset.category})
+    smartcampaign_output = sync_smartcampaign(document, smartcampaign_data, categories)
     additions: dict[str, bytes] = {}
     if smartcampaign_name:
         replacements[smartcampaign_name] = smartcampaign_output
