@@ -33,10 +33,22 @@ Use this skill when inspecting or modifying SmartCanvas template exports.
 22. Run `scripts/compare_smartcanvas_dropdown_signals.py <before> <after>` when you only need the focused dropdown/control delta.
 23. For raw package-level before/after reverse-engineering, run `scripts/compare_smartcanvas_packages.py <before> <after>`.
 24. Read `references/package-structure.md` when you need the current reverse-engineered structure, naming patterns, binary fingerprint notes, image asset conventions, image readiness notes, image derivative notes, experimental dropdown writer/result notes, package workspace notes, control-surface notes, image metadata notes, XML inventory notes, database/binding notes, or `info.bin` catalog notes.
-25. For image dropdown work, prefer comparing two exports:
+25. To create an image-list dropdown in a template export, run:
+
+```bash
+python3 smart-canvas-skill/scripts/create_smartcanvas_image_dropdown.py \
+  "template-export.zip" \
+  "image-folder-or-assets.zip" \
+  "template-export-with-dropdown.zip" \
+  --field-name image_dropdown_1 \
+  --category Test_category
+```
+
+The script patches `Document.xml` and `smartcampaign.xml`, adds/updates the Image List form field, switches, switched layers, picture nodes, image category, and image files/sidecars. It preserves the outer SmartCanvas export ZIP shape when the input has nested `Admin/<campaign>.zip`.
+26. For image dropdown work, prefer comparing two exports:
    - a minimal template before adding the dropdown
    - the same template after adding one image dropdown with known options
-26. Treat `.bin` files as generated unless a round-trip test proves a hand edit is accepted by SmartCanvas. `info.bin` is partly decoded for inspection, but not yet safe to rewrite.
+27. Treat `.bin` files as generated unless a round-trip test proves a hand edit is accepted by SmartCanvas. `info.bin` is partly decoded for inspection, but not yet safe to rewrite. `create_smartcanvas_image_dropdown.py` does not rewrite `info.bin`; if the target template does not already catalog the image filenames, import the result into SmartCanvas and re-export to let SmartCanvas rebuild the image catalog.
 
 ## Current Findings
 
@@ -58,3 +70,5 @@ Use this skill when inspecting or modifying SmartCanvas template exports.
 - The demo's `template.xml` has the document shell and style/settings data, but no obvious image dropdown control node.
 - The demo key XML inventory has 5 files; `template.xml` has 220 elements and 37 schema paths, while `template.dhtt` has 42 elements and 24 schema paths.
 - The demo's key XML files do not reference any of the 24 catalog image filenames; image availability appears to come from the image files/sidecars plus `info.bin`, while actual dropdown controls likely add separate XML nodes or attributes.
+- In the provided ZIP manipulation examples, adding images changes image files/sidecars, `Document.xml`, `smartcampaign.xml`, `Document_600_001.png`, and `info.bin`. Linking those existing images to an Image List dropdown changes only `Document.xml` and `smartcampaign.xml`; `template.xml`, `template.dhtt`, and `info.bin` remain unchanged.
+- The observed Image List dropdown schema is: `DataInterfaceItem` with `Display DisplayType="7" DisplayTypeName="Image List"`, `DataInterfaceKey` rows whose `KeyValue` is `template/<filename>` and `ImageFilename` is `<filename>|<width>|<height>`, one `Switch` per image testing `[[field_name]] == 'template/<filename>'`, and image layers/pictures marked with `SwitchMode="Switch"`.

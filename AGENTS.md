@@ -25,4 +25,11 @@ This is the process that we follow to create an image select-dropdown within the
 
 The result should output a new SmartCanvas ZIP file with the images part of a dropdown select.
 
-To come up with the script for this function, I have given you 1. a blank design ZIP, 2. a ZIP with two images added in two different layers (in the same Test_category), and 3. another zip with those two images linked to two different switches and added to the same image dropdown select.  
+To come up with the script for this function, I have given you a folder called example-zip with:
+1. a blank design ZIP
+2. a ZIP with two images added in two different layers (in the same Test_category)
+3. another zip with those two images linked to two different switches and added to the same image dropdown select.  
+
+Reverse engineer these ZIP files and create a new skill to complete this function. You may want to create a script and example usage. 
+
+There are example images in the example-images/ directory
