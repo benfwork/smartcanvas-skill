@@ -19,6 +19,7 @@ Images: example-images/
 Output name: blank-design-with-image-dropdown.zip
 Dropdown field name: image_dropdown_1
 Category name: Test_category
+Image position: X 0, Y 0
 ```
 
 You can also keep it simpler:
@@ -67,5 +68,7 @@ Codex will create a new SmartCanvas ZIP that includes:
 - one switch per image
 - one image layer per image
 - the switch logic needed to show the selected image
+
+All dropdown images are placed in the same spot on the canvas. If you know where they should go, include the X/Y position in your request. If you leave it out, Codex will use X 0, Y 0.
 
 If your images are brand new to the template, SmartCanvas may still need to rebuild its internal image catalog after import. In that case, import the new ZIP into SmartCanvas and re-export it once.

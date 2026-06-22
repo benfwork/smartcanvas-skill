@@ -625,8 +625,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("output", help="Output ZIP path")
     parser.add_argument("--field-name", default="image_dropdown_1", help="Form field/dropdown name")
     parser.add_argument("--category", default="Image_dropdown", help="Image category name for smartcampaign.xml")
-    parser.add_argument("--left", type=float, default=17.0, help="Inserted picture left coordinate")
-    parser.add_argument("--top", type=float, default=22.0, help="Inserted picture top coordinate")
+    parser.add_argument("--left", type=float, default=0.0, help="Inserted picture left/X coordinate")
+    parser.add_argument("--top", type=float, default=0.0, help="Inserted picture top/Y coordinate")
     parser.add_argument("--height", type=float, default=104.0, help="Inserted picture height")
     args = parser.parse_args(argv)
 
