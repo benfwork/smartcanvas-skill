@@ -27,6 +27,7 @@ from xml.etree import ElementTree as ET
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 SIDECAR_RE = re.compile(r"_(jpg|jpeg|png)_(info\.xml|thumbi\.png|thumbn\.png)$", re.I)
+THUMB_NAME_RE = re.compile(r"_(thumbi|thumbn)\.png$", re.I)
 
 
 @dataclass
@@ -53,6 +54,10 @@ class ImageAsset:
     @property
     def xml_source(self) -> str:
         return f"template/{self.filename}"
+
+    @property
+    def key_value(self) -> str:
+        return self.filename
 
     @property
     def switch_name(self) -> str:
@@ -145,6 +150,10 @@ def sidecar_prefix(filename: str) -> str:
     return f"{path.stem}_{ext}"
 
 
+def normalized_lookup(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
 def normalize_info_sidecar(data: bytes, asset: ImageAsset) -> bytes:
     try:
         root = parse_xml(data)
@@ -232,6 +241,99 @@ def collect_images(source: Path) -> tuple[list[ImageAsset], list[str]]:
                 key = posixpath.join(posixpath.dirname(name), sidecar_prefix(base))
                 originals.append((name, zf.read(info), grouped_sidecars.setdefault(key, {})))
         return build_assets(originals, warnings)
+
+
+def collect_existing_library_images(
+    inner: dict[str, ZipMember],
+    image_prefix: str,
+    selector: str,
+    default_category: str,
+) -> tuple[list[ImageAsset], list[str], dict[str, bytes]]:
+    warnings: list[str] = []
+    selected = normalized_lookup(selector)
+    catalog = read_info_catalog(inner)
+    image_members = {
+        posixpath.basename(name.replace("\\", "/")): member
+        for name, member in inner.items()
+        if name.replace("\\", "/").startswith(image_prefix)
+        and Path(posixpath.basename(name.replace("\\", "/"))).suffix.lower() in IMAGE_EXTS
+        and not SIDECAR_RE.search(posixpath.basename(name.replace("\\", "/")))
+        and not THUMB_NAME_RE.search(posixpath.basename(name.replace("\\", "/")))
+    }
+    sidecar_members = {
+        posixpath.basename(name.replace("\\", "/")): member.data
+        for name, member in inner.items()
+        if name.replace("\\", "/").startswith(image_prefix)
+        and SIDECAR_RE.search(posixpath.basename(name.replace("\\", "/")))
+    }
+
+    matched: list[tuple[str, ZipMember, str]] = []
+    for filename, member in sorted(image_members.items()):
+        category = catalog_category_for(catalog, filename)
+        search_values = {
+            normalized_lookup(category),
+            normalized_lookup(filename),
+            normalized_lookup(Path(filename).stem),
+        }
+        if selected in search_values or any(selected and selected in value for value in search_values):
+            matched.append((filename, member, category))
+
+    if not matched:
+        raise ValueError(f"no existing library images matched {selector!r}")
+
+    assets: list[ImageAsset] = []
+    for filename, member, category in matched:
+        data = member.data
+        width, height = get_image_size(data, filename)
+        asset = ImageAsset(
+            source_path=image_prefix + filename,
+            filename=filename,
+            category=category or default_category,
+            data=data,
+            width=width,
+            height=height,
+            sidecars={},
+        )
+        prefix = sidecar_prefix(filename)
+        for suffix in ("info.xml", "thumbi.png", "thumbn.png"):
+            sidecar_name = f"{prefix}_{suffix}"
+            if sidecar_name in sidecar_members:
+                asset.sidecars[sidecar_name] = sidecar_members[sidecar_name]
+        if not asset.sidecars:
+            warnings.append(f"{filename}: selected from library but sidecars were not found")
+        assets.append(asset)
+    return assets, warnings, {asset.filename: asset.data for asset in assets}
+
+
+def catalog_category_for(catalog: dict[str, str], filename: str) -> str:
+    if filename in catalog:
+        return catalog[filename]
+    for raw_filename, category in catalog.items():
+        if raw_filename.endswith(filename) or raw_filename[1:] == filename:
+            return category
+    return ""
+
+
+def read_info_catalog(inner: dict[str, ZipMember]) -> dict[str, str]:
+    catalog: dict[str, str] = {}
+    info_members = [
+        member.data
+        for name, member in inner.items()
+        if name.replace("\\", "/").endswith("/info.bin") or name == "info.bin"
+    ]
+    if not info_members:
+        return catalog
+    blob = b"\n".join(info_members)
+    image = rb"([A-Za-z0-9_ .,'()&+\-\[\]]+\.(?:jpg|jpeg|png))"
+    category = rb"\x12([\x01-\x40])([A-Za-z0-9_ .,'()&+\-/]+)"
+    for match in re.finditer(image + category, blob, re.I):
+        filename = match.group(1).decode("utf-8", errors="ignore")
+        length = match.group(2)[0]
+        raw_category = match.group(3)[:length]
+        category_name = raw_category.decode("utf-8", errors="ignore").strip()
+        if filename and category_name:
+            catalog[filename] = category_name
+    return catalog
 
 
 def common_zip_root(image_names: list[str]) -> str:
@@ -381,7 +483,7 @@ def ensure_form_dropdown(root: ET.Element, field_name: str, assets: list[ImageAs
         "DataInterfaceItem",
         {
             "Name": field_name,
-            "Value": assets[0].xml_source,
+            "Value": assets[0].key_value,
             "Guid": str(uuid.uuid4()),
             "ItemType": "0",
             "ItemTypeName": "Text",
@@ -410,7 +512,7 @@ def ensure_form_dropdown(root: ET.Element, field_name: str, assets: list[ImageAs
             "DataInterfaceKey",
             {
                 "PageNr": "0",
-                "KeyValue": asset.xml_source,
+                "KeyValue": asset.key_value,
                 "DisplayValue": asset.display_value,
                 "ImageFilename": f"{asset.filename}|{asset.width}|{asset.height}",
             },
@@ -430,12 +532,19 @@ def ensure_switches(root: ET.Element, field_name: str, assets: list[ImageAsset])
             "Switch",
             {
                 "Name": asset.switch_name,
-                "X": f"([[{field_name}]] == '{asset.xml_source}')",
+                "X": f"([[{field_name}]] == '{asset.key_value}')",
             },
         )
 
 
-def ensure_layers_and_pictures(root: ET.Element, assets: list[ImageAsset], left: float, top: float, height: float) -> None:
+def ensure_layers_and_pictures(
+    root: ET.Element,
+    assets: list[ImageAsset],
+    left: float,
+    top: float,
+    width: float | None,
+    height: float | None,
+) -> None:
     layers = ensure_child(root, "Layers")
     existing_layers = {layer.get("DisplayName"): layer for layer in layers if local_name(layer) == "Layer"}
     default_layer = next((layer for layer in layers if layer.get("IsDefault") == "true"), None)
@@ -467,7 +576,8 @@ def ensure_layers_and_pictures(root: ET.Element, assets: list[ImageAsset], left:
     }
     for asset in assets:
         picture = existing_pictures.get(asset.xml_source)
-        width = height * asset.width / asset.height
+        picture_width = width if width is not None else height * asset.width / asset.height
+        picture_height = height if height is not None else picture_width * asset.height / asset.width
         if picture is None:
             picture = ET.SubElement(
                 composition,
@@ -476,8 +586,8 @@ def ensure_layers_and_pictures(root: ET.Element, assets: list[ImageAsset], left:
                     "ID": str(uuid.uuid4()),
                     "Left": str(left),
                     "Top": str(top),
-                    "Width": str(width),
-                    "Height": str(height),
+                    "Width": str(picture_width),
+                    "Height": str(picture_height),
                     "Background": "",
                     "Opacity": "1",
                     "Layer": find_layer_id(layers, asset.switch_name),
@@ -495,6 +605,10 @@ def ensure_layers_and_pictures(root: ET.Element, assets: list[ImageAsset], left:
         picture.set("OrgSource", asset.xml_source)
         picture.set("OrigWidth", str(asset.width))
         picture.set("OrigHeight", str(asset.height))
+        picture.set("Left", str(left))
+        picture.set("Top", str(top))
+        picture.set("Width", str(picture_width))
+        picture.set("Height", str(picture_height))
 
 
 def find_first(root: ET.Element, tag: str) -> ET.Element | None:
@@ -514,6 +628,18 @@ def find_layer_id(layers: ET.Element, display_name: str) -> str:
 def random_color(seed: str) -> str:
     rng = random.Random(seed)
     return f"#{rng.randrange(32, 224):02x}{rng.randrange(32, 224):02x}{rng.randrange(32, 224):02x}"
+
+
+def convert_measurements(args: argparse.Namespace) -> None:
+    if args.units == "points":
+        return
+    scale = 72.0
+    args.left *= scale
+    args.top *= scale
+    if args.width is not None:
+        args.width *= scale
+    if args.height is not None:
+        args.height *= scale
 
 
 def sync_smartcampaign(document_root: ET.Element, smartcampaign_data: bytes | None, categories: Iterable[str]) -> bytes:
@@ -570,19 +696,25 @@ def create_inner_zip(inner: dict[str, ZipMember], output_replacements: dict[str,
 def patch_package(args: argparse.Namespace) -> list[str]:
     input_path = Path(args.input)
     output_path = Path(args.output)
-    assets, warnings = collect_images(Path(args.images))
-    apply_default_category(assets, args.category)
     outer, inner_name, inner = read_package(input_path)
     document_name = find_inner_file(inner, "Document.xml")
     smartcampaign_name = next((name for name in inner if name.replace("\\", "/").endswith("/smartcampaign.xml")), None)
     prefix = campaign_prefix(document_name)
     image_prefix = prefix + "images/"
+    existing_library = bool(args.library_folder or args.library_filter)
+    if existing_library:
+        selector = args.library_folder or args.library_filter
+        assets, warnings, existing_image_data = collect_existing_library_images(inner, image_prefix, selector, args.category)
+    else:
+        assets, warnings = collect_images(Path(args.images))
+        apply_default_category(assets, args.category)
+        existing_image_data = {}
 
     document_root = parse_xml(inner[document_name].data)
     document = editable_document(document_root)
     ensure_form_dropdown(document, args.field_name, assets)
     ensure_switches(document, args.field_name, assets)
-    ensure_layers_and_pictures(document, assets, args.left, args.top, args.height)
+    ensure_layers_and_pictures(document, assets, args.left, args.top, args.width, args.height)
 
     replacements = {document_name: xml_bytes(document_root)}
     smartcampaign_data = inner[smartcampaign_name].data if smartcampaign_name else None
@@ -594,14 +726,19 @@ def patch_package(args: argparse.Namespace) -> list[str]:
     else:
         additions[prefix + "smartcampaign.xml"] = smartcampaign_output
 
-    for asset in assets:
-        additions[image_prefix + asset.filename] = asset.data
-        for sidecar_name, sidecar_data in asset.sidecars.items():
-            additions[image_prefix + sidecar_name] = sidecar_data
+    if not existing_library:
+        for asset in assets:
+            additions[image_prefix + asset.filename] = asset.data
+            for sidecar_name, sidecar_data in asset.sidecars.items():
+                additions[image_prefix + sidecar_name] = sidecar_data
 
     info_member = next((member for name, member in inner.items() if name.replace("\\", "/").endswith("/info.bin") or name == "info.bin"), None)
     if info_member is not None:
-        missing_catalog = [asset.filename for asset in assets if asset.filename.encode("utf-8") not in info_member.data]
+        missing_catalog = [
+            asset.filename
+            for asset in assets
+            if asset.filename not in existing_image_data and asset.filename.encode("utf-8") not in info_member.data
+        ]
         if missing_catalog:
             warnings.append(
                 "info.bin was not rewritten and does not catalog: "
@@ -621,14 +758,32 @@ def patch_package(args: argparse.Namespace) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Create a SmartCanvas image-list dropdown in a template export ZIP.")
     parser.add_argument("input", help="SmartCanvas export ZIP or inner campaign ZIP")
-    parser.add_argument("images", help="Directory or ZIP of image files/assets")
-    parser.add_argument("output", help="Output ZIP path")
+    parser.add_argument("images_or_output", help="Image source for external mode, or output ZIP when using --library-folder")
+    parser.add_argument("output", nargs="?", help="Output ZIP path")
     parser.add_argument("--field-name", default="image_dropdown_1", help="Form field/dropdown name")
     parser.add_argument("--category", default="Image_dropdown", help="Image category name for smartcampaign.xml")
+    parser.add_argument("--library-folder", help="Select existing library images by SmartCanvas catalog folder/category")
+    parser.add_argument("--library-filter", help="Select existing library images by filename/category substring")
     parser.add_argument("--left", type=float, default=0.0, help="Inserted picture left/X coordinate")
     parser.add_argument("--top", type=float, default=0.0, help="Inserted picture top/Y coordinate")
-    parser.add_argument("--height", type=float, default=104.0, help="Inserted picture height")
+    parser.add_argument("--width", type=float, help="Inserted picture width")
+    parser.add_argument("--height", type=float, help="Inserted picture height")
+    parser.add_argument("--units", choices=("points", "inches"), default="points", help="Coordinate units for left/top/width/height")
     args = parser.parse_args(argv)
+    if args.library_folder or args.library_filter:
+        if args.output is None:
+            args.output = args.images_or_output
+        else:
+            parser.error("when using --library-folder/--library-filter, provide only input and output positionals")
+        args.images = None
+    else:
+        if args.output is None:
+            parser.error("external image mode requires input, images, and output positionals")
+        args.images = args.images_or_output
+    has_explicit_size = args.width is not None or args.height is not None
+    convert_measurements(args)
+    if not has_explicit_size:
+        args.height = 104.0
 
     try:
         warnings = patch_package(args)
