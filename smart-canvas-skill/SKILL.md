@@ -49,10 +49,10 @@ python3 smart-canvas-skill/scripts/create_smartcanvas_library_dropdown.py \
   --units inches
 ```
 
-When the user wants new dropdown images to match existing placed images, inspect the original export first:
+When the user wants new dropdown images to match existing placed images, inspect the original export first. Prefer the page-aware locator when the same X/Y may exist on multiple pages or when the original layer must be removed:
 
 ```bash
-python3 smart-canvas-skill/scripts/inspect_smartcanvas_dropdown_context.py \
+python3 smart-canvas-skill/scripts/locate_smartcanvas_images.py \
   "template-export.zip" \
   --target 7.33,-0.125 \
   --target 3.6667,2.83 \
@@ -61,7 +61,7 @@ python3 smart-canvas-skill/scripts/inspect_smartcanvas_dropdown_context.py \
   --units inches
 ```
 
-Use the nearest `Picture` node's `Left`, `Top`, `Width`, and `Height` values for the dropdown's placement unless the user gives an override. SmartCanvas stores coordinates in points; pass `--units inches` when using user-facing inch measurements.
+Use the matching `Picture` node's `page`, `Left`, `Top`, `Width`, `Height`, source, and layer details for placement/removal. SmartCanvas stores coordinates in points; pass `--units inches` when using user-facing inch measurements. If the locator is not needed, `inspect_smartcanvas_dropdown_context.py` remains available for quick nearest-picture/category checks.
 
 After writing a dropdown export, verify the fields and placements:
 
@@ -73,5 +73,7 @@ python3 smart-canvas-skill/scripts/verify_smartcanvas_dropdowns.py \
 ```
 
 When the user asks for an image dropdown and does not provide placement, ask for the X/Y coordinates if it is natural to clarify before running. If they do not provide coordinates, use `--left 0 --top 0`. All images in the dropdown should be placed at the same X/Y position and share the same size/margins.
+
+The dropdown helpers sanitize `--field-name` to SmartCanvas-safe identifiers containing only letters, numbers, `_`, and `-`; for example `Inside - Msgs of Help 1/3` becomes `Inside-Msgs-of-Help-1-3`. Use the sanitized field names for verification. Switches/layers are scoped by sanitized field name and option index, so separate dropdowns can safely reuse the same image filenames/categories.
 
 The dropdown scripts patch `Document.xml` and `smartcampaign.xml`, add/update the Image List form field, switches, switched layers, picture nodes, image categories, and image files/sidecars. They preserve the outer SmartCanvas export ZIP shape when the input has nested `Admin/<campaign>.zip`. External image input may be a nested directory or ZIP; non-image files are ignored, subfolders become category names such as `level2/levelA`, and duplicate image basenames are made unique for SmartCanvas's flat `images/` folder. Existing-library mode reuses images already under the campaign `images/` folder and does not duplicate their binary files.

@@ -77,6 +77,20 @@ def safe_name(value: str) -> str:
     return cleaned
 
 
+def safe_field_name(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_-]+", "-", value)
+    cleaned = re.sub(r"-+", "-", cleaned).strip("-_")
+    if not cleaned:
+        cleaned = "image-dropdown"
+    if cleaned[0].isdigit():
+        cleaned = f"field-{cleaned}"
+    return cleaned
+
+
+def switch_name_for(field_name: str, index: int) -> str:
+    return f"{safe_name(field_name)}_{index:02d}"
+
+
 def display_name(value: str) -> str:
     words = re.sub(r"[_-]+", " ", value).strip().split()
     return " ".join(w[:1].upper() + w[1:] for w in words) or value
@@ -522,16 +536,21 @@ def ensure_form_dropdown(root: ET.Element, field_name: str, assets: list[ImageAs
 def ensure_switches(root: ET.Element, field_name: str, assets: list[ImageAsset]) -> None:
     resources = ensure_child(root, "Resources")
     switches = ensure_child(resources, "Switches")
-    wanted = {asset.switch_name for asset in assets}
+    prefix = safe_name(field_name) + "_"
+    wanted = {switch_name_for(field_name, index) for index, _ in enumerate(assets, 1)}
+    legacy_wanted = {asset.switch_name for asset in assets}
     for child in list(switches):
-        if local_name(child) == "Switch" and child.get("Name") in wanted:
+        if local_name(child) != "Switch":
+            continue
+        name = child.get("Name") or ""
+        if name in wanted or name in legacy_wanted or name.startswith(prefix):
             switches.remove(child)
-    for asset in assets:
+    for index, asset in enumerate(assets, 1):
         ET.SubElement(
             switches,
             "Switch",
             {
-                "Name": asset.switch_name,
+                "Name": switch_name_for(field_name, index),
                 "X": f"([[{field_name}]] == '{asset.key_value}')",
             },
         )
@@ -539,6 +558,7 @@ def ensure_switches(root: ET.Element, field_name: str, assets: list[ImageAsset])
 
 def ensure_layers_and_pictures(
     root: ET.Element,
+    field_name: str,
     assets: list[ImageAsset],
     left: float,
     top: float,
@@ -550,32 +570,36 @@ def ensure_layers_and_pictures(
     default_layer = next((layer for layer in layers if layer.get("IsDefault") == "true"), None)
     insert_at = list(layers).index(default_layer) if default_layer is not None else len(layers)
 
+    switch_names = {asset.filename: switch_name_for(field_name, index) for index, asset in enumerate(assets, 1)}
     for asset in assets:
-        layer = existing_layers.get(asset.switch_name)
+        switch_name = switch_names[asset.filename]
+        layer = existing_layers.get(switch_name)
         if layer is None:
             layer = ET.Element(
                 "Layer",
                 {
                     "Name": str(uuid.uuid4()),
-                    "DisplayName": asset.switch_name,
-                    "Color": random_color(asset.switch_name),
+                    "DisplayName": switch_name,
+                    "Color": random_color(switch_name),
                 },
             )
             layers.insert(insert_at, layer)
             insert_at += 1
         layer.set("SwitchMode", "Switch")
-        layer.set("SwitchName", asset.switch_name)
+        layer.set("SwitchName", switch_name)
 
     composition = find_first(root, "Composition")
     if composition is None:
         raise ValueError("Document.xml does not contain a Composition to receive Picture nodes")
     existing_pictures = {
-        picture.get("Source"): picture
+        (picture.get("Source"), picture.get("Layer")): picture
         for picture in composition
         if local_name(picture) == "Picture" and picture.get("Source")
     }
     for asset in assets:
-        picture = existing_pictures.get(asset.xml_source)
+        switch_name = switch_names[asset.filename]
+        layer_id = find_layer_id(layers, switch_name)
+        picture = existing_pictures.get((asset.xml_source, layer_id))
         picture_width = width if width is not None else height * asset.width / asset.height
         picture_height = height if height is not None else picture_width * asset.height / asset.width
         if picture is None:
@@ -590,7 +614,7 @@ def ensure_layers_and_pictures(
                     "Height": str(picture_height),
                     "Background": "",
                     "Opacity": "1",
-                    "Layer": find_layer_id(layers, asset.switch_name),
+                    "Layer": layer_id,
                     "CustomStretch": "UniformToFill",
                     "Stretch": "Fill",
                     "Source": asset.xml_source,
@@ -599,7 +623,7 @@ def ensure_layers_and_pictures(
                     "OrigHeight": str(asset.height),
                 },
             )
-        picture.set("Layer", find_layer_id(layers, asset.switch_name))
+        picture.set("Layer", layer_id)
         picture.set("SwitchMode", "Switch")
         picture.set("Source", asset.xml_source)
         picture.set("OrgSource", asset.xml_source)
@@ -710,11 +734,16 @@ def patch_package(args: argparse.Namespace) -> list[str]:
         apply_default_category(assets, args.category)
         existing_image_data = {}
 
+    requested_field_name = args.field_name
+    args.field_name = safe_field_name(args.field_name)
+    if args.field_name != requested_field_name:
+        warnings.append(f"field name sanitized from {requested_field_name!r} to {args.field_name!r} for SmartCanvas switch compatibility")
+
     document_root = parse_xml(inner[document_name].data)
     document = editable_document(document_root)
     ensure_form_dropdown(document, args.field_name, assets)
     ensure_switches(document, args.field_name, assets)
-    ensure_layers_and_pictures(document, assets, args.left, args.top, args.width, args.height)
+    ensure_layers_and_pictures(document, args.field_name, assets, args.left, args.top, args.width, args.height)
 
     replacements = {document_name: xml_bytes(document_root)}
     smartcampaign_data = inner[smartcampaign_name].data if smartcampaign_name else None

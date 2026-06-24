@@ -82,12 +82,13 @@ def patch_dropdown(input_path, output_path, field_name, categories, left, top, w
     prefix = smartcanvas.campaign_prefix(document_name)
     image_prefix = prefix + "images/"
     assets = collect_by_exact_categories(inner, image_prefix, categories)
+    field_name = smartcanvas.safe_field_name(field_name)
 
     document_root = smartcanvas.parse_xml(inner[document_name].data)
     document = smartcanvas.editable_document(document_root)
     smartcanvas.ensure_form_dropdown(document, field_name, assets)
     smartcanvas.ensure_switches(document, field_name, assets)
-    smartcanvas.ensure_layers_and_pictures(document, assets, left, top, width, height)
+    smartcanvas.ensure_layers_and_pictures(document, field_name, assets, left, top, width, height)
 
     replacements = {document_name: smartcanvas.xml_bytes(document_root)}
     smartcampaign_data = inner[smartcampaign_name].data if smartcampaign_name else None
@@ -136,10 +137,12 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     scale = 72.0 if args.units == "inches" else 1.0
+    requested_field_name = args.field_name
+    safe_field_name = smartcanvas.safe_field_name(args.field_name)
     count = patch_dropdown(
         args.input,
         args.output,
-        args.field_name,
+        safe_field_name,
         args.category,
         args.left * scale,
         args.top * scale,
@@ -147,6 +150,8 @@ def main(argv=None):
         args.height * scale,
     )
     print(f"Wrote {args.output} with {count} images")
+    if safe_field_name != requested_field_name:
+        print(f"warning: field name sanitized from {requested_field_name!r} to {safe_field_name!r}", file=sys.stderr)
     return 0
 
 
