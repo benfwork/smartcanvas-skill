@@ -1,6 +1,6 @@
 ---
 name: smart-canvas
-description: Work with EFI/DirectSmile SmartCanvas template exports, especially reverse-engineering package structure, inspecting template XML and image resources, comparing exported templates, preparing image assets/dropdowns for SmartCanvas imports, and programmatically locking or unlocking template layers/objects.
+description: Work with EFI/DirectSmile SmartCanvas template exports, especially reverse-engineering package structure, inspecting template XML and image resources, comparing exported templates, preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating text fields and text styles, and programmatically locking or unlocking template layers/objects.
 ---
 
 To create an image-list dropdown in a template export, run:
@@ -79,6 +79,31 @@ python3 smart-canvas-skill/scripts/set_smartcanvas_picture_geometry.py \
 ```
 
 Use this when existing image dropdown layers need exact bleed-aware dimensions without rebuilding the dropdown. Keep shared vertical edges numerically identical across related crop rules, such as using the same left and width for primary and secondary Crop 3 layers; tiny differences like 3.666 vs 3.6667 inches can rasterize as visible seams. Put more specific rules, such as secondary crop layers, alongside broader rules; the helper applies the most specific layer/crop match first.
+
+To create a text field in a template export, run:
+
+```bash
+python3 smart-canvas-skill/scripts/create_smartcanvas_text_field.py \
+  "template-export.zip" \
+  "template-export-with-text.zip" \
+  --text "Customer Name" \
+  --left 10 \
+  --top 10 \
+  --width 279 \
+  --height 20.5 \
+  --font "Arial Bold Italic" \
+  --font-size 9 \
+  --line-height 12 \
+  --tracking 200 \
+  --style-name "customer name style" \
+  --layer-name "Text Layer"
+```
+
+When the user asks to add text and does not provide placement, ask for X/Y coordinates if it is natural to clarify before running. If they do not provide coordinates, use `--left 0 --top 0 --width 200 --height 40`. Use `--units inches` when the user gives measurements in inches; otherwise coordinates are points.
+
+The text helper patches `Document.xml` by creating/reusing the named layer, creating/updating a `Resources/TextStyles/ParagraphStyle`, and adding a `Text` node inside the page `Composition`. It syncs `smartcampaign.xml` resources when present, or creates a minimal `smartcampaign.xml` when missing. It preserves the outer SmartCanvas export ZIP shape when the input has nested `Admin/<campaign>.zip`.
+
+Supported `--font` values are: Arial, Arial Bold Italic, Arial Bold, Arial Italic, Calibri, Calibri Bold, Calibri Bold Italic, Calibri Italic, Century Gothic, Century Gothic Bold, Century Gothic Bold Italic, Century Gothic Italic, Comic Sans MS, Comic Sans MS Bold, Garamond, Garamond Bold, Garamond Italic, Times New Roman, Times New Roman Bold Italic, Times New Roman Bold, Times New Roman Italic, Trebuchet MS, Trebuchet MS Bold Italic, Trebuchet MS Bold, Trebuchet MS Italic.
 
 To lock or unlock template layers/objects, use the lock helper. SmartCanvas layer locks are stored as `IsLocked="true"` on `Layer` entries in `Document.xml`; object-level locks are stored on `DocModel` entries in `template.xml`. To lock every layer/object:
 
