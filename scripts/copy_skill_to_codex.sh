@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
+
+# copies skill from WSL to Windows for use with the Desktop Windows app
+
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source_dir="$repo_root/smart-canvas-skill"
+
+# update Users/{username} with your username
 codex_skills_dir="${CODEX_SKILLS_DIR:-/mnt/c/Users/benf2004/.codex/skills}"
 target_dir="$codex_skills_dir/smart-canvas-skill"
 
