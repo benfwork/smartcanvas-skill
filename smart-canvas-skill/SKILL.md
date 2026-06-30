@@ -1,6 +1,6 @@
 ---
 name: smart-canvas
-description: Work with EFI/DirectSmile SmartCanvas template exports, especially reverse-engineering package structure, inspecting template XML and image resources, comparing exported templates, preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating text fields and text styles, and programmatically locking or unlocking template layers/objects.
+description: Work with EFI/DirectSmile SmartCanvas template exports, especially reverse-engineering package structure, inspecting template XML and image resources, comparing exported templates, preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating text fields, text styles, QR codes/barcodes, and programmatically locking or unlocking template layers/objects.
 ---
 
 To create an image-list dropdown in a template export, run:
@@ -104,6 +104,17 @@ When the user asks to add text and does not provide placement, ask for X/Y coord
 The text helper patches `Document.xml` by creating/reusing the named layer, creating/updating a `Resources/TextStyles/ParagraphStyle`, and adding a `Text` node inside the page `Composition`. It syncs `smartcampaign.xml` resources when present, or creates a minimal `smartcampaign.xml` when missing. It preserves the outer SmartCanvas export ZIP shape when the input has nested `Admin/<campaign>.zip`.
 
 Supported `--font` values are: Arial, Arial Bold Italic, Arial Bold, Arial Italic, Calibri, Calibri Bold, Calibri Bold Italic, Calibri Italic, Century Gothic, Century Gothic Bold, Century Gothic Bold Italic, Century Gothic Italic, Comic Sans MS, Comic Sans MS Bold, Garamond, Garamond Bold, Garamond Italic, Times New Roman, Times New Roman Bold Italic, Times New Roman Bold, Times New Roman Italic, Trebuchet MS, Trebuchet MS Bold Italic, Trebuchet MS Bold, Trebuchet MS Italic.
+
+To set a QR code to use a SmartCanvas form field, write the field placeholder into the QR `Barcode` node's `Content` attribute:
+
+```bash
+python3 smart-canvas-skill/scripts/set_smartcanvas_qr_content.py \
+  "template-export.zip" \
+  "template-export-with-qr-field.zip" \
+  --field-name MyWebsite
+```
+
+The QR helper patches QR `Barcode` nodes in `Document.xml` where `BarCodeType="QRCode"` or `UI-BarCodeType` contains `QR`. `--field-name MyWebsite` writes `[[MyWebsite]]`; use `--content "literal value"` for a fixed QR payload. If more than one QR code matches, pass `--id <Barcode-ID>`, `--layer <Layer-ID>`, or `--all`.
 
 To lock or unlock template layers/objects, use the lock helper. SmartCanvas layer locks are stored as `IsLocked="true"` on `Layer` entries in `Document.xml`; object-level locks are stored on `DocModel` entries in `template.xml`. To lock every layer/object:
 
