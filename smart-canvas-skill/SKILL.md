@@ -1,6 +1,6 @@
 ---
 name: smart-canvas
-description: Work with EFI/DirectSmile SmartCanvas template exports, especially reverse-engineering package structure, inspecting template XML and image resources, comparing exported templates, preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating text fields, text styles, QR codes/barcodes, and programmatically locking or unlocking template layers/objects.
+description: Work with EFI/DirectSmile SmartCanvas template exports, especially reverse-engineering package structure, inspecting template XML and image resources, comparing exported templates, preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating shapes, lines, form fields, variables, text fields, text styles, QR codes/barcodes, and programmatically locking or unlocking template layers/objects.
 ---
 
 To create an image-list dropdown in a template export, run:
@@ -104,6 +104,63 @@ When the user asks to add text and does not provide placement, ask for X/Y coord
 The text helper patches `Document.xml` by creating/reusing the named layer, creating/updating a `Resources/TextStyles/ParagraphStyle`, and adding a `Text` node inside the page `Composition`. It syncs `smartcampaign.xml` resources when present, or creates a minimal `smartcampaign.xml` when missing. It preserves the outer SmartCanvas export ZIP shape when the input has nested `Admin/<campaign>.zip`.
 
 Supported `--font` values are: Arial, Arial Bold Italic, Arial Bold, Arial Italic, Calibri, Calibri Bold, Calibri Bold Italic, Calibri Italic, Century Gothic, Century Gothic Bold, Century Gothic Bold Italic, Century Gothic Italic, Comic Sans MS, Comic Sans MS Bold, Garamond, Garamond Bold, Garamond Italic, Times New Roman, Times New Roman Bold Italic, Times New Roman Bold, Times New Roman Italic, Trebuchet MS, Trebuchet MS Bold Italic, Trebuchet MS Bold, Trebuchet MS Italic.
+
+To create rectangles/squares, ovals/circles, lines, form fields, or computed variables, use the shapes/variables helper:
+
+```bash
+python3 smart-canvas-skill/scripts/create_smartcanvas_shapes_variables.py \
+  "template-export.zip" \
+  "template-export-with-shapes.zip" \
+  --shape-json '{"type":"rectangle","left":10,"top":30.5,"width":75.8,"height":84.2,"color":"swatch,R=237 G=247 B=163","opacity":1}' \
+  --shape-json '{"type":"circle","left":120.5,"top":30.5,"width":84.2,"color":"#9bb7a7"}' \
+  --line-json '{"left":17,"top":37.5,"width":236.8,"height":71.9,"color":"swatch,R=122 G=148 B=196","thickness":11.072,"opacity":0.53,"blend_mode":"Multiply"}'
+```
+
+Use `type` values `rectangle`, `square`, `ellipse`, `oval`, or `circle`. Shape colors are written to `Background`; line colors are written to `LineColor`. SmartCanvas accepts hex colors such as `#9bb7a7` and swatch strings such as `swatch,R=237 G=247 B=163`. `opacity` uses SmartCanvas decimal opacity, where `1` is fully opaque and `0.5` is 50%. Pass `--units inches` when using inch coordinates; line thickness is also converted from inches in that mode. The helper creates/reuses a layer named by `--layer-name` unless an individual JSON spec includes `"layer":"Layer Name"`.
+
+To add form fields and variables, pass JSON specs or simple `Name=Expression` variables:
+
+```bash
+python3 smart-canvas-skill/scripts/create_smartcanvas_shapes_variables.py \
+  "template-export.zip" \
+  "template-export-with-variables.zip" \
+  --form-field-json '{"name":"FavoriteColor","value":"Red","display_type":"radio","options":["Red","Blue"]}' \
+  --variable 'Greeting=[[FavoriteColor]]'
+```
+
+For SmartCanvas variable functions, use the built-in function catalog. It is based on `example-zip/variable-examples.zip` plus `references/variable-functions.md`; read that reference when choosing exact function names, arguments, or behavior.
+
+```bash
+python3 smart-canvas-skill/scripts/create_smartcanvas_shapes_variables.py --list-variable-functions
+
+python3 smart-canvas-skill/scripts/create_smartcanvas_shapes_variables.py \
+  "template-export.zip" \
+  "template-export-with-all-function-vars.zip" \
+  --all-variable-functions
+
+python3 smart-canvas-skill/scripts/create_smartcanvas_shapes_variables.py \
+  "template-export.zip" \
+  "template-export-with-function-vars.zip" \
+  --variable-function html-encode \
+  --variable-function add \
+  --function-variable-json '{"name":"CustomReplace","function":"replace","args":["abc","a","z"]}'
+```
+
+Use `--variable-function` for one of the built-in examples by key, variable name, or function name. Use `--variable-function-prefix` when adding examples to a template that may already contain same-named variables. Use `--function-variable-json` for custom function-backed variables; string args are written with SmartCanvas escaped single quotes, and an arg object such as `{"raw":"[[FieldName]]"}` is written without quotes for field/variable references or nested expressions.
+
+For the birthday-year pattern from `example-zip/shapes_and_variables.zip`, use the built-in preset:
+
+```bash
+python3 smart-canvas-skill/scripts/create_smartcanvas_shapes_variables.py \
+  "template-export.zip" \
+  "template-export-with-birthday-vars.zip" \
+  --birthday-example \
+  --age-field Age \
+  --had-birthday-field HadBirthdayThisYearSoFar \
+  --birthyear-variable Birthyear
+```
+
+The birthday preset creates text form field `Age`, radio form field `HadBirthdayThisYearSoFar` with `Yes`/`No`, and variables `CurrentYear`, `AgePlusOne`, and `Birthyear`. The helper writes visible objects to `Document.xml` `Composition`, creates shape templates under `ExtendedProperties/ShapeTemplates` when missing, writes form fields to `Resources/DataInterface2`, writes computed variables to `Resources/Variables`, and syncs `Resources` into `smartcampaign.xml` when present or creates it when needed.
 
 To set a QR code to use a SmartCanvas form field, write the field placeholder into the QR `Barcode` node's `Content` attribute:
 
