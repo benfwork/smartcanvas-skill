@@ -80,7 +80,7 @@ python3 smart-canvas-skill/scripts/set_smartcanvas_picture_geometry.py \
 
 Use this when existing image dropdown layers need exact bleed-aware dimensions without rebuilding the dropdown. Keep shared vertical edges numerically identical across related crop rules, such as using the same left and width for primary and secondary Crop 3 layers; tiny differences like 3.666 vs 3.6667 inches can rasterize as visible seams. Put more specific rules, such as secondary crop layers, alongside broader rules; the helper applies the most specific layer/crop match first.
 
-To lock or unlock template objects, use the lock helper. SmartCanvas object locks are stored on `DocModel` entries in `template.xml`, not on the outer export wrapper. To lock every object:
+To lock or unlock template layers/objects, use the lock helper. SmartCanvas layer locks are stored as `IsLocked="true"` on `Layer` entries in `Document.xml`; object-level locks are stored on `DocModel` entries in `template.xml`. To lock every layer/object:
 
 ```bash
 python3 smart-canvas-skill/scripts/set_smartcanvas_locks.py \
@@ -90,7 +90,7 @@ python3 smart-canvas-skill/scripts/set_smartcanvas_locks.py \
   --all
 ```
 
-To unlock everything, pass `--state unlocked --all`. To target specific content, use `--layer-name "Layer Display Name"` for objects assigned to a SmartCanvas layer, or `--contains "text or filename"` for objects whose XML attributes/text include a value. Repeat selectors as needed. The helper preserves the nested `Admin/<campaign>.zip` package shape and reports matched/changed `DocModel` counts.
+To unlock everything, pass `--state unlocked --all`. Unlocking removes `IsLocked` from `Document.xml` layers, matching observed SmartCanvas exports for unlocked layers. To target specific content, use `--layer-name "Layer Display Name"` for that layer and objects assigned to it, or `--contains "text or filename"` for layers/objects whose XML attributes/text include a value. Repeat selectors as needed. The helper preserves the nested `Admin/<campaign>.zip` package shape and reports matched/changed layer and `DocModel` counts.
 
 After writing a dropdown export, verify the fields and placements:
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lock or unlock SmartCanvas template objects by layer or content matching."""
+"""Lock or unlock SmartCanvas template layers and objects."""
 
 from __future__ import annotations
 
@@ -138,6 +138,30 @@ def docmodel_matches(
     return False
 
 
+def layer_matches(layer: ET.Element, all_layers: bool, layer_names: list[str], contains: list[str]) -> bool:
+    if all_layers:
+        return True
+    display_name = layer.get("DisplayName") or layer.get("Name") or ""
+    if layer_names and normalize(display_name) in {normalize(name) for name in layer_names}:
+        return True
+    if contains:
+        haystack = normalize(element_search_text(layer))
+        return any(normalize(needle) in haystack for needle in contains)
+    return False
+
+
+def set_layer_lock(layer: ET.Element, locked: bool) -> bool:
+    if locked:
+        if layer.get("IsLocked") == "true":
+            return False
+        layer.set("IsLocked", "true")
+        return True
+    if "IsLocked" in layer.attrib:
+        del layer.attrib["IsLocked"]
+        return True
+    return False
+
+
 def set_docmodel_lock(docmodel: ET.Element, locked: bool) -> bool:
     changed = False
     lock_value = "True" if locked else "False"
@@ -151,6 +175,27 @@ def set_docmodel_lock(docmodel: ET.Element, locked: bool) -> bool:
             docmodel.set(attr, enable_value)
             changed = True
     return changed
+
+
+def patch_document_xml(
+    data: bytes,
+    locked: bool,
+    all_layers: bool,
+    layer_names: list[str],
+    contains: list[str],
+) -> tuple[bytes, int, int]:
+    root = parse_xml(data)
+    matched = 0
+    changed = 0
+    for elem in root.iter():
+        if local_name(elem) != "Layer":
+            continue
+        if not layer_matches(elem, all_layers, layer_names, contains):
+            continue
+        matched += 1
+        if set_layer_lock(elem, locked):
+            changed += 1
+    return xml_bytes(root), matched, changed
 
 
 def patch_template_xml(
@@ -174,7 +219,7 @@ def patch_template_xml(
     return xml_bytes(root), matched, changed
 
 
-def patch_package(args: argparse.Namespace) -> tuple[int, int, list[str]]:
+def patch_package(args: argparse.Namespace) -> tuple[int, int, int, int, list[str]]:
     outer, inner_name, inner = read_package(Path(args.input))
     template_names = find_inner_files(inner, "template.xml")
     if not template_names:
@@ -190,8 +235,8 @@ def patch_package(args: argparse.Namespace) -> tuple[int, int, list[str]]:
         warnings.append("no matching layer names found: " + ", ".join(args.layer_name))
 
     replacements: dict[str, bytes] = {}
-    total_matched = 0
-    total_changed = 0
+    total_docmodel_matched = 0
+    total_docmodel_changed = 0
     for template_name in template_names:
         data, matched, changed = patch_template_xml(
             inner[template_name].data,
@@ -200,13 +245,30 @@ def patch_package(args: argparse.Namespace) -> tuple[int, int, list[str]]:
             layer_ids,
             args.contains,
         )
-        total_matched += matched
-        total_changed += changed
+        total_docmodel_matched += matched
+        total_docmodel_changed += changed
         if changed:
             replacements[template_name] = data
 
-    if total_matched == 0:
+    total_layer_matched = 0
+    total_layer_changed = 0
+    for document_name in find_inner_files(inner, "Document.xml"):
+        data, matched, changed = patch_document_xml(
+            inner[document_name].data,
+            args.state == "locked",
+            args.all,
+            args.layer_name,
+            args.contains,
+        )
+        total_layer_matched += matched
+        total_layer_changed += changed
+        if changed:
+            replacements[document_name] = data
+
+    if total_docmodel_matched == 0:
         warnings.append("no DocModel objects matched the requested selectors")
+    if total_layer_matched == 0:
+        warnings.append("no Document.xml layers matched the requested selectors")
 
     inner_bytes = create_inner_zip(inner, replacements)
     output_path = Path(args.output)
@@ -215,30 +277,31 @@ def patch_package(args: argparse.Namespace) -> tuple[int, int, list[str]]:
         write_zip(output_path, outer)
     else:
         output_path.write_bytes(inner_bytes)
-    return total_matched, total_changed, warnings
+    return total_docmodel_matched, total_docmodel_changed, total_layer_matched, total_layer_changed, warnings
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Lock or unlock SmartCanvas template objects.")
+    parser = argparse.ArgumentParser(description="Lock or unlock SmartCanvas template layers and objects.")
     parser.add_argument("input", help="SmartCanvas export ZIP or inner campaign ZIP")
     parser.add_argument("output", help="Output ZIP path")
     parser.add_argument("--state", choices=("locked", "unlocked"), required=True)
-    parser.add_argument("--all", action="store_true", help="Apply to every DocModel object in template.xml")
-    parser.add_argument("--layer-name", action="append", default=[], help="Apply to objects assigned to this layer display name; repeatable")
-    parser.add_argument("--contains", action="append", default=[], help="Apply to objects whose attributes/text contain this value; repeatable")
+    parser.add_argument("--all", action="store_true", help="Apply to every layer in Document.xml and every DocModel object in template.xml")
+    parser.add_argument("--layer-name", action="append", default=[], help="Apply to this layer display name and objects assigned to it; repeatable")
+    parser.add_argument("--contains", action="append", default=[], help="Apply to layers/objects whose attributes/text contain this value; repeatable")
     args = parser.parse_args(argv)
 
     if not args.all and not args.layer_name and not args.contains:
         parser.error("provide --all, --layer-name, or --contains")
 
     try:
-        matched, changed, warnings = patch_package(args)
+        docmodel_matched, docmodel_changed, layer_matched, layer_changed, warnings = patch_package(args)
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
     print(f"Wrote {args.output}")
-    print(f"Matched {matched} DocModel object(s); changed {changed}.")
+    print(f"Matched {layer_matched} Document.xml layer(s); changed {layer_changed}.")
+    print(f"Matched {docmodel_matched} template.xml DocModel object(s); changed {docmodel_changed}.")
     for warning in warnings:
         print(f"warning: {warning}", file=sys.stderr)
     return 0
