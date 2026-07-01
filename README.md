@@ -32,6 +32,8 @@ Prepare the files Codex needs, usually:
 
 If you already have a SmartCanvas template export ZIP, include it. If you want to start from a blank template, just say that in your request.
 
+To export your SmartCanvas template
+
 Then ask Codex in plain language. For example:
 
 ```text
@@ -65,17 +67,13 @@ Output name: new-product.zip
 
 Create SmartCanvas image-list dropdowns from a folder, ZIP, or existing SmartCanvas image library. Nested image folders can become dropdown categories. Codex creates the field, switches, layers, image placement, and selection logic.
 
-### Blank Templates
-
-Start from an approved blank SmartCanvas export when you do not already have a template ZIP. If Codex cannot access GitHub, it will ask you to allow the download or provide a blank export manually.
-
 ### Existing Image Placement
 
 Find placed images in an export and reuse their page, position, size, and layer details. This is useful when a new dropdown needs to line up with an existing design.
 
-### Picture Geometry
+### Layout manipulation
 
-Adjust existing dropdown images to exact positions and sizes, including crop-aware rules. This is useful for correcting alignment, bleed, or panel sizing without rebuilding the whole dropdown.
+Adjust existing elements to exact positions and sizes. Make sure elements are perfectly aligned.
 
 ### Text Fields
 
@@ -87,7 +85,7 @@ Add rectangles, squares, ovals, circles, and lines. Colors can be hex values or 
 
 ### Form Fields and Variables
 
-Add form fields, radio options, computed variables, and examples of SmartCanvas variable functions. This can support personalization logic such as greetings, calculations, conditional values, and birthday-year examples.
+Add form fields, radio options, computed variables, and SmartCanvas variable functions. The skill has documentation for all 52 SmartCanvas functions. This can support personalization logic such as greetings, calculations, conditional values, and birthday-year examples.
 
 ### QR Codes
 
@@ -101,9 +99,15 @@ Lock or unlock layers and objects in a template. Codex can target everything, a 
 
 Inspect exported packages, locate images, and verify dropdown fields and placements after changes are made.
 
+### Blank Templates
+
+Start from an approved blank SmartCanvas export when you do not already have a template ZIP. If Codex cannot access GitHub, it will ask you to allow the download or provide a blank export manually.
+
 ## Image Folders
 
-Your image folder can be flat:
+You may import images em masse using a folder
+
+It can be flat:
 
 ```text
 images/

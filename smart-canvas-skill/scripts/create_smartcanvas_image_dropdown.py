@@ -567,8 +567,10 @@ def ensure_layers_and_pictures(
 ) -> None:
     layers = ensure_child(root, "Layers")
     existing_layers = {layer.get("DisplayName"): layer for layer in layers if local_name(layer) == "Layer"}
-    default_layer = next((layer for layer in layers if layer.get("IsDefault") == "true"), None)
-    insert_at = list(layers).index(default_layer) if default_layer is not None else len(layers)
+    # SmartCanvas renders lower layer indexes above later layers. Image dropdowns
+    # are usually content/foreground, so keep their switch layers before shape or
+    # default layers even when the helper is run after background construction.
+    insert_at = 0
 
     switch_names = {asset.filename: switch_name_for(field_name, index) for index, asset in enumerate(assets, 1)}
     for asset in assets:
@@ -583,8 +585,10 @@ def ensure_layers_and_pictures(
                     "Color": random_color(switch_name),
                 },
             )
-            layers.insert(insert_at, layer)
-            insert_at += 1
+        elif layer in list(layers):
+            layers.remove(layer)
+        layers.insert(insert_at, layer)
+        insert_at += 1
         layer.set("SwitchMode", "Switch")
         layer.set("SwitchName", switch_name)
 

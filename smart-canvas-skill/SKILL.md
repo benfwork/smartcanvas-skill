@@ -1,7 +1,20 @@
 ---
 name: smart-canvas
-description: Work with SmartCanvas template exports, including preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating shapes, lines, form fields, variables, text fields, text styles, QR codes/barcodes, creating a new product from an approved blank seed export, and programmatically locking or unlocking template layers/objects.
+description: Work with SmartCanvas template exports, including preparing and arranging image assets/dropdowns; creating/arranging shapes, lines, form fields, variables, text fields, text styles, QR codes/barcodes; setting page/canvas size and layout geometry; creating a new product from an approved blank seed export; and programmatically locking or unlocking template layers/objects.
 ---
+
+For complex product creation, translate the user's visual constraints into the document geometry before adding objects. If the user says the design/product/page/layout is a square, make the SmartCanvas page square by setting the `Document` insert size, every `Page`, and every `Composition`, not just by drawing square artwork inside a non-square page. Use inches when the user gives print-like sizes; SmartCanvas stores the values as points.
+
+```bash
+python3 smart-canvas-skill/scripts/set_smartcanvas_page_size.py \
+  "template-export.zip" \
+  "template-export-square.zip" \
+  --width 5 \
+  --height 5 \
+  --units inches
+```
+
+When composing several helper outputs, build background and structural layers first, then add foreground image/text/dropdown content. SmartCanvas layer order is visual order: lower layer indexes render above later layers. Dropdown image layers should be foreground by default so selected images remain visible on top of shape layers. The dropdown helper enforces this for its switch layers; if you manually edit layers, keep dropdown/text/content layers before decorative/background layers.
 
 To create an image-list dropdown in a template export, run:
 
@@ -195,6 +208,8 @@ python3 smart-canvas-skill/scripts/verify_smartcanvas_dropdowns.py \
 ```
 
 When the user asks for an image dropdown and does not provide placement, ask for the X/Y coordinates if it is natural to clarify before running. If they do not provide coordinates, use `--left 0 --top 0`. All images in the dropdown should be placed at the same X/Y position and share the same size/margins.
+
+When the dropdown sits inside a frame, circle, or other visible container, place the picture box inside that container with an intentional inset margin. If SmartCanvas clipping is not being created, do not imply that rectangular images are clipped by a circle; use a picture box that fits within the circle and keep the circle/frame below the dropdown layers.
 
 The dropdown helpers sanitize `--field-name` to SmartCanvas-safe identifiers containing only letters, numbers, `_`, and `-`; for example `Inside - Msgs of Help 1/3` becomes `Inside-Msgs-of-Help-1-3`. Use the sanitized field names for verification. Switches/layers are scoped by sanitized field name and option index, so separate dropdowns can safely reuse the same image filenames/categories.
 
