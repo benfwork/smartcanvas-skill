@@ -105,7 +105,7 @@ Start from an approved blank SmartCanvas export when you do not already have a t
 
 ## Image Folders
 
-You may import images em masse using a folder
+You may import images en masse using a folder or ZIP export. 
 
 It can be flat:
 
@@ -140,4 +140,42 @@ Non-image files are ignored.
 
 Codex creates a new SmartCanvas ZIP and leaves the original export unchanged. Import the new ZIP into SmartCanvas to review it.
 
+Go to `File > Overwrite with exported design` within SmartCanvas to import the new design. 
+
 For brand-new images, SmartCanvas may need to rebuild its internal image catalog after import. If that happens, import the new ZIP into SmartCanvas and re-export it once.
+
+# Demos
+
+These demos are written as Codex-ready prompts. Paste one fenced block into Codex to generate a demo SmartCanvas ZIP. You can optionally include a ZIP with images to include in the design; if not, it will create placeholders.
+
+### Real Estate Listing Postcard
+
+```text
+Use the SmartCanvas skill to create a polished real estate listing postcard from a blank template and save it as `demo-real-estate-postcard.zip`. Make it a 6 by 4 inch postcard with a clean property-photo area, listing headline, price, open house detail, agent contact area, and a small compliance line.
+
+Use shapes for the visual structure. If I uploaded a ZIP of property images, use it for a property photo dropdown; otherwise create a few distinct shape-based image placeholders so the demo still shows where the dropdown artwork would go. Create editable fields for the listing and agent details, lock the background/compliance artwork, leave the customer-editable content unlocked, and verify any dropdown you create before finishing.
+```
+
+### Product Label Variant Builder
+
+```text
+Use the SmartCanvas skill to create a small-batch product label variant builder from a blank template and save it as `demo-product-label-variant-builder.zip`. Make it a 3.5 by 2 inch coffee label with a premium but simple layout built from shapes, text, and a clear artwork area.
+
+If I uploaded a ZIP of label artwork images, use it for an artwork dropdown; otherwise create a few alternate shape-based artwork placeholders instead of real images. Include editable fields for product name, product type, flavor notes, roast level, net weight, and batch number. Add a few computed variables that format those fields into display lines on the label. Lock the label structure, leave the artwork and product fields editable, and verify any dropdown you create before finishing.
+```
+
+### Double-Sided Tri-Fold Brochure
+
+```text
+Use the SmartCanvas skill to create a double-sided tri-fold brochure from a blank template and save it as `demo-trifold-brochure.zip`. Make it an 11 by 8.5 inch landscape brochure with front and back sides, three clear panels per side, fold-guide structure, a cover panel, an inside story/services spread, a contact panel, and a call-to-action area.
+
+If I uploaded a ZIP of brochure assets, use those images for one or more panel artwork dropdowns; otherwise create polished shape-based image placeholders so the brochure still looks complete without real photos. Add editable fields for headline, subhead, body copy, service bullets, contact details, website, and call-to-action text. Use a QR code or QR-ready field for the website if possible, lock the structural/fold/background artwork, leave the marketing copy and artwork areas editable, and verify any dropdowns you create before finishing.
+```
+
+### Birthday Variable Function Mailer
+
+```text
+Use the SmartCanvas skill to create a birthday-personalization mailer from a blank template and save it as `demo-birthday-variable-functions.zip`. Make it a cheerful 5 by 7 inch card that shows off SmartCanvas form fields and variable functions: customer name, birthday date, offer amount, favorite color, and a website or redemption URL.
+
+Build the design mostly with shapes and editable text. Add computed variables that use birthday/date logic such as age, has-birthday-today, return-month-name, date-format, add-days-to-date, plus a few formatting functions like capitalize, replace, url-encode, and add. Use those variables in visible text for a personalized greeting, birthday-month message, offer expiration date, generated promo code or redemption URL, and a small "logic preview" area that shows the calculated values. Lock the decorative birthday artwork, leave the input fields and visible personalized copy editable, and include a QR-ready field for the redemption URL if possible.
+```
