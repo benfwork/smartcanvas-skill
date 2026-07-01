@@ -1,8 +1,8 @@
 # SmartCanvas Skill
 
-The SmartCanvas skill helps Codex update SmartCanvas template exports. Give Codex a SmartCanvas export ZIP, describe the change you want, and Codex can create a new ZIP that you can import back into SmartCanvas.
+The SmartCanvas skill helps Codex create or update SmartCanvas template exports. Give Codex a SmartCanvas export ZIP, or ask it to start from a blank template, describe the change you want, and Codex can create a new ZIP that you can import back into SmartCanvas.
 
-This skill is best for editing or building on an exported SmartCanvas template. It needs an existing export ZIP as the starting point - even if it's a blank SmartCanvas template.
+When you ask to start from scratch, the skill downloads an approved blank SmartCanvas export from GitHub and uses that as the starting point.
 
 ## Install
 
@@ -27,9 +27,10 @@ Copying the `smart-canvas-skill` folder into your Codex skills folder:
 
 Prepare the files Codex needs, usually:
 
-- A SmartCanvas template export ZIP.
 - Any images or details needed for the requested change.
 - The output ZIP name you want.
+
+If you already have a SmartCanvas template export ZIP, include it. If you want to start from a blank template, just say that in your request.
 
 Then ask Codex in plain language. For example:
 
@@ -49,11 +50,24 @@ You can also keep the request simple:
 Use the SmartCanvas skill on my template ZIP and image folder. Make an image dropdown and save a new SmartCanvas ZIP.
 ```
 
+Or start from a blank template:
+
+```text
+Use the SmartCanvas skill to create a new SmartCanvas product from scratch.
+Add a text field and an image dropdown.
+Images: example-images/
+Output name: new-product.zip
+```
+
 ## Features
 
 ### Image Dropdowns
 
 Create SmartCanvas image-list dropdowns from a folder, ZIP, or existing SmartCanvas image library. Nested image folders can become dropdown categories. Codex creates the field, switches, layers, image placement, and selection logic.
+
+### Blank Templates
+
+Start from an approved blank SmartCanvas export when you do not already have a template ZIP. If Codex cannot access GitHub, it will ask you to allow the download or provide a blank export manually.
 
 ### Existing Image Placement
 

@@ -1,6 +1,6 @@
 ---
 name: smart-canvas
-description: Work with SmartCanvas template exports, especially preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating shapes, lines, form fields, variables, text fields, text styles, QR codes/barcodes, and programmatically locking or unlocking template layers/objects.
+description: Work with SmartCanvas template exports, including preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating shapes, lines, form fields, variables, text fields, text styles, QR codes/barcodes, creating a new product from an approved blank seed export, and programmatically locking or unlocking template layers/objects.
 ---
 
 To create an image-list dropdown in a template export, run:
@@ -200,4 +200,11 @@ The dropdown helpers sanitize `--field-name` to SmartCanvas-safe identifiers con
 
 The dropdown scripts patch `Document.xml` and `smartcampaign.xml`, add/update the Image List form field, switches, switched layers, picture nodes, image categories, and image files/sidecars. They preserve the outer SmartCanvas export ZIP shape when the input has nested `Admin/<campaign>.zip`. External image input may be a nested directory or ZIP; non-image files are ignored, subfolders become category names such as `level2/levelA`, and duplicate image basenames are made unique for SmartCanvas's flat `images/` folder. Existing-library mode reuses images already under the campaign `images/` folder and does not duplicate their binary files.
 
+When the user asks to create a SmartCanvas product/template "from scratch" and does not provide a template export ZIP, first prepare a blank seed export:
 
+```bash
+python3 smart-canvas-skill/scripts/prepare_smartcanvas_blank_template.py \
+  "blank-template.zip"
+```
+
+This downloads the approved blank SmartCanvas seed export from the pinned GitHub URL, verifies its SHA256, caches it under `~/.cache/smart-canvas-skill`, validates that it has the expected outer SmartCanvas wrapper, and copies it to the requested output path. If network access is blocked, ask the user to allow the download or provide a blank SmartCanvas export ZIP manually. Treat the prepared ZIP as the input `template-export.zip` for the other helpers below.
