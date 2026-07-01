@@ -15,9 +15,7 @@ Using $skill-installer, please install this skill:
 https://github.com/benfwork/smartcanvas-skill/tree/main/smart-canvas-skill
 ```
 
-Or you can manually install by:
-
-Copying the `smart-canvas-skill` folder into your Codex skills folder:
+Or you can manually install by copying the `smart-canvas-skill` folder into your Codex skills folder:
 
 ```text
 ~/.codex/skills/smart-canvas-skill
