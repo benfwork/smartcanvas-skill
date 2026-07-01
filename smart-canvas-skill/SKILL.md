@@ -14,7 +14,7 @@ python3 smart-canvas-skill/scripts/set_smartcanvas_page_size.py \
   --units inches
 ```
 
-When composing several helper outputs, build background and structural layers first, then add foreground image/text/dropdown content. SmartCanvas layer order is visual order: lower layer indexes render above later layers. Dropdown image layers should be foreground by default so selected images remain visible on top of shape layers. The dropdown helper enforces this for its switch layers; if you manually edit layers, keep dropdown/text/content layers before decorative/background layers.
+When composing several helper outputs, keep SmartCanvas's layer order in mind: lower layer indexes render above later layers. Foreground content such as dropdowns, images, text, QR codes, and editable placeholders must be ordered before decorative/background layers so the background does not cover the design. If you create structural/background layers first, reorder the final `Layer` entries so dropdown/text/content layers are above them. Dropdown image layers should be foreground by default so selected images remain visible on top of shape layers. The dropdown helper enforces this for its switch layers; if you manually edit layers, keep dropdown/text/content layers before decorative/background layers.
 
 To create an image-list dropdown in a template export, run:
 
