@@ -1,6 +1,6 @@
 ---
 name: smart-canvas
-description: Work with EFI/DirectSmile SmartCanvas template exports, especially reverse-engineering package structure, inspecting template XML and image resources, comparing exported templates, preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating shapes, lines, form fields, variables, text fields, text styles, QR codes/barcodes, and programmatically locking or unlocking template layers/objects.
+description: Work with SmartCanvas template exports, especially reverse-engineering package structure, inspecting template XML and image resources, comparing exported templates, preparing image assets/dropdowns for SmartCanvas imports, creating/manipulating shapes, lines, form fields, variables, text fields, text styles, QR codes/barcodes, and programmatically locking or unlocking template layers/objects.
 ---
 
 To create an image-list dropdown in a template export, run:

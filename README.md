@@ -1,32 +1,91 @@
 # SmartCanvas Skill
 
-This skill helps Codex update SmartCanvas product/template ZIPs. Its main job right now is creating image dropdowns from a folder or ZIP of photos.
+The SmartCanvas skill helps Codex update SmartCanvas template exports. Give Codex a SmartCanvas export ZIP, describe the change you want, and Codex can create a new ZIP that you can import back into SmartCanvas.
 
-## What To Give Codex
+This skill is best for editing or building on an exported SmartCanvas template. It needs an existing export ZIP as the starting point - even if it's a blank SmartCanvas template.
 
-Prepare two things:
+## Install
+
+Automatic Installation
+
+In Codex, ask:
+
+```codex
+Using $skill-installer, please install this skill:
+https://github.com/benfwork/smartcanvas-skill/tree/main/smart-canvas-skill
+```
+
+Or you can manually install by:
+
+Copying the `smart-canvas-skill` folder into your Codex skills folder:
+
+```text
+~/.codex/skills/smart-canvas-skill
+```
+
+## Use
+
+Prepare the files Codex needs, usually:
 
 - A SmartCanvas template export ZIP.
-- A folder or ZIP of images.
+- Any images or details needed for the requested change.
+- The output ZIP name you want.
 
-Then ask Codex to use this skill. For example:
+Then ask Codex in plain language. For example:
 
 ```text
 Use the SmartCanvas skill to add these images as an image dropdown to my blank SmartCanvas export.
 
-Template ZIP: example-zip/1. blank design.zip
+Template ZIP: example-zip/blank-design.zip
 Images: example-images/
-Output name: blank-design-with-image-dropdown.zip
+Output name: blank-design-with-dropdown.zip
 Dropdown field name: image_dropdown_1
-Category name: Test_category
 Image position: X 0, Y 0
 ```
 
-You can also keep it simpler:
+You can also keep the request simple:
 
 ```text
 Use the SmartCanvas skill on my template ZIP and image folder. Make an image dropdown and save a new SmartCanvas ZIP.
 ```
+
+## Features
+
+### Image Dropdowns
+
+Create SmartCanvas image-list dropdowns from a folder, ZIP, or existing SmartCanvas image library. Nested image folders can become dropdown categories. Codex creates the field, switches, layers, image placement, and selection logic.
+
+### Existing Image Placement
+
+Find placed images in an export and reuse their page, position, size, and layer details. This is useful when a new dropdown needs to line up with an existing design.
+
+### Picture Geometry
+
+Adjust existing dropdown images to exact positions and sizes, including crop-aware rules. This is useful for correcting alignment, bleed, or panel sizing without rebuilding the whole dropdown.
+
+### Text Fields
+
+Add SmartCanvas text objects with placement, font, size, line height, tracking, style name, and layer name. If you do not provide coordinates, Codex can use a simple default placement or ask for exact measurements.
+
+### Shapes and Lines
+
+Add rectangles, squares, ovals, circles, and lines. Colors can be hex values or SmartCanvas swatch strings, and measurements can be in points or inches.
+
+### Form Fields and Variables
+
+Add form fields, radio options, computed variables, and examples of SmartCanvas variable functions. This can support personalization logic such as greetings, calculations, conditional values, and birthday-year examples.
+
+### QR Codes
+
+Update QR code content so it points to a SmartCanvas field, variable, or fixed value.
+
+### Locks
+
+Lock or unlock layers and objects in a template. Codex can target everything, a named layer, or content that contains specific text or filenames.
+
+### Inspection and Verification
+
+Inspect exported packages, locate images, and verify dropdown fields and placements after changes are made.
 
 ## Image Folders
 
@@ -39,7 +98,7 @@ images/
   photo3.png
 ```
 
-Or it can be nested:
+Or nested:
 
 ```text
 images/
@@ -49,7 +108,7 @@ images/
   level2/levelA/photo2.jpg
 ```
 
-For nested folders, each subfolder becomes an image category in SmartCanvas:
+For nested folders, each subfolder can become an image category in SmartCanvas:
 
 ```text
 level1
@@ -61,14 +120,6 @@ Non-image files are ignored.
 
 ## What You Get Back
 
-Codex will create a new SmartCanvas ZIP that includes:
+Codex creates a new SmartCanvas ZIP and leaves the original export unchanged. Import the new ZIP into SmartCanvas to review it.
 
-- the images
-- an image dropdown field
-- one switch per image
-- one image layer per image
-- the switch logic needed to show the selected image
-
-All dropdown images are placed in the same spot on the canvas. If you know where they should go, include the X/Y position in your request. If you leave it out, Codex will use X 0, Y 0.
-
-If your images are brand new to the template, SmartCanvas may still need to rebuild its internal image catalog after import. In that case, import the new ZIP into SmartCanvas and re-export it once.
+For brand-new images, SmartCanvas may need to rebuild its internal image catalog after import. If that happens, import the new ZIP into SmartCanvas and re-export it once.
