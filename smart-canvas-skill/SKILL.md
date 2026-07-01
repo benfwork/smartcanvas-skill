@@ -3,7 +3,7 @@ name: smart-canvas
 description: Work with SmartCanvas template exports, including preparing and arranging image assets/dropdowns; creating/arranging shapes, lines, form fields, variables, text fields, text styles, QR codes/barcodes; setting page/canvas size and layout geometry; creating a new product from an approved blank seed export; and programmatically locking or unlocking template layers/objects.
 ---
 
-For complex product creation, translate the user's visual constraints into the document geometry before adding objects. If the user says the design/product/page/layout is a square, make the SmartCanvas page square by setting the `Document` insert size, every `Page`, and every `Composition`, not just by drawing square artwork inside a non-square page. Use inches when the user gives print-like sizes; SmartCanvas stores the values as points.
+For complex product creation, translate the user's visual constraints into the document geometry before adding objects. If the user says the design/product/page/layout is a square, for example, make the SmartCanvas page square by setting the `Document` insert size, every `Page`, and every `Composition`, not just by drawing square artwork inside a non-square page. Use inches when the user gives print-like sizes; SmartCanvas stores the values as points.
 
 ```bash
 python3 smart-canvas-skill/scripts/set_smartcanvas_page_size.py \
